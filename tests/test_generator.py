@@ -20,7 +20,8 @@ from src.generator import (
     generate_instance,
     generate_suite,
 )
-from src.instance import Arc, Instance, load
+from src.instance import Arc, Instance
+from src.instance import load as load_instance
 
 
 def test_regime_width_ranges() -> None:
@@ -103,7 +104,7 @@ def _assert_legal(inst: Instance, tmp_path: Path) -> None:
     # load() runs the full structural validator and raises on any illegality.
     out = tmp_path / f"{inst.name}.json"
     inst.save(out)
-    reloaded = load(out)
+    reloaded = load_instance(out)
     assert reloaded == inst
 
 
@@ -130,3 +131,12 @@ def test_suite_yields_full_sweep() -> None:
     names = [inst.name for inst in generate_suite(seed=0)]
     assert len(names) == NUM_SIZES * NUM_LISTS * 3
     assert len(set(names)) == len(names)  # unique names
+
+
+def test_toy_instance_matches_committed_fixture() -> None:
+    from src.generator import toy_instance
+
+    fixture = Path(__file__).parent / "fixtures" / "toy.json"
+    inst = toy_instance()
+    assert inst == load_instance(fixture)
+    assert inst.known_optimum == 8

@@ -156,3 +156,24 @@ def generate_suite(seed: int) -> Iterator[Instance]:
         for list_idx in range(NUM_LISTS):
             for regime in Regime:
                 yield generate_instance(size_idx, list_idx, regime, seed)
+
+
+def toy_instance() -> Instance:
+    """Tiny hand-checkable instance (known optimum 8); matches fixtures/toy.json.
+
+    s->a cap 3, a->t cap 2; one 2-period job on a->t with start window [1,5],
+    horizon 6. Max flow is min-cut 2 per period x 6 periods minus the 2 periods
+    the a->t arc is out for maintenance => 2*6 - 2*2 = 8.
+    """
+    return Instance(
+        name="toy",
+        horizon=6,
+        source="s",
+        sink="t",
+        nodes=("s", "a", "t"),
+        arcs=(Arc("s", "a", 3), Arc("a", "t", 2)),
+        jobs=(Job("j0", ("a", "t"), 2, 1, 5),),
+        seed=42,
+        max_jobs_per_period=None,
+        known_optimum=8,
+    )
