@@ -57,7 +57,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-ignore_missing_imports = true   # gurobipy / highspy ship partial stubs
+ignore_missing_imports = true   # ortools ships partial / no stubs for some submodules
 ```
 
 ## Git

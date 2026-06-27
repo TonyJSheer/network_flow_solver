@@ -43,4 +43,4 @@ Risks:
 - [edge cases, anything the reviewer should watch]
 ```
 
-Respond with: **PLAN → CHANGES → TESTS → VALIDATION → RISKS** (see `docs/AGENTS.md`).
+Respond with: **PLAN → CHANGES → TESTS → VALIDATION → RISKS** (see `CLAUDE.md`).

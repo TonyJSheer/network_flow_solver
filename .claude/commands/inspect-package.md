@@ -1,5 +1,5 @@
-Inspect an installed package to understand its exact API surface (useful for `gurobipy`,
-`networkx`, `highspy` — where guessing the API wastes time).
+Inspect an installed package to understand its exact API surface (useful for `ortools`
+CP-SAT / MathOpt and `networkx` — where guessing the API wastes time).
 
 Package: $ARGUMENTS
 
@@ -17,7 +17,8 @@ Glob inside the venv (package names use underscores on disk):
 .venv/lib/python*/site-packages/<package>-*.dist-info/
 ```
 Try both the PyPI name and the import name if the first glob finds nothing
-(e.g. `gurobipy` imports as `gurobipy`; check `__init__.py` exports).
+(e.g. `ortools` imports as `ortools.sat.python.cp_model` / `ortools.math_opt.python` —
+check the relevant submodule `__init__.py` for exports).
 
 ## Step 3 — Read the API surface (best signal first)
 
