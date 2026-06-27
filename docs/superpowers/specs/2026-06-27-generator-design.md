@@ -102,7 +102,7 @@ needs no change — windows stay independent; feasibility is guaranteed by the g
 Focus: **every generated instance is a legal graph/instance**, especially the `--quick`
 (small) sizes. Determinism gets light coverage only.
 
-- **Legality (primary):** every generated instance passes `instance._validate` without
+- **Legality:** every generated instance passes `instance._validate` without
   raising — for all 8 sizes and all three regimes, with emphasis on the small `--quick`
   sizes. Source reaches sink; no parallel arcs; all jobs reference real arcs; every job
   fits the horizon.
@@ -110,8 +110,8 @@ Focus: **every generated instance is a legal graph/instance**, especially the `-
   construction invariant directly).
 - **Parameter ranges:** per-job window width ∈ regime range; duration ∈ [10, 30];
   jobs/arc ∈ [5, 15].
-- **Monotonicity:** arc count non-decreasing across the 8 sizes.
 - **Toy:** `toy_instance()` round-trips to the committed fixture and has `known_optimum = 8`.
 - **Determinism (light):** same seed reproduces an instance; no exhaustive byte-equality
   sweep.
+- **Monotonicity (light):** arc count non-decreasing across the 8 sizes.
 ```
