@@ -78,7 +78,7 @@ results/           # CSV + chart artefacts (gitignored — regenerate via run.py
 
 ## Commands
 
-Python 3.11+, `uv`, `ortools` (CP-SAT + MathOpt + bundled SCIP/HiGHS), `networkx`
+Python 3.12+, `uv`, `ortools` (CP-SAT + MathOpt + bundled SCIP/HiGHS), `networkx`
 (max-flow/min-cut), `numpy`, `matplotlib`, `pytest`. Run Python through `uv` — never bare
 `python3`.
 
