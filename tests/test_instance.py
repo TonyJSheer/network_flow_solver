@@ -68,3 +68,24 @@ def test_job_not_fitting_horizon_rejected(tmp_path: Path) -> None:
     )
     with pytest.raises(InstanceError, match="horizon"):
         load(bad)
+
+
+def test_arc_endpoint_not_in_nodes_rejected(tmp_path: Path) -> None:
+    bad = tmp_path / "badnode.json"
+    bad.write_text(
+        '{"name":"b","horizon":3,"source":"s","sink":"t","nodes":["s","t"],'
+        '"arcs":[{"u":"s","v":"x","capacity":1}],'
+        '"jobs":[]}'
+    )
+    with pytest.raises(InstanceError, match="undeclared node"):
+        load(bad)
+
+
+def test_source_or_sink_not_in_nodes_rejected(tmp_path: Path) -> None:
+    bad = tmp_path / "badsrc.json"
+    bad.write_text(
+        '{"name":"b","horizon":3,"source":"s","sink":"q","nodes":["s","t"],'
+        '"arcs":[],"jobs":[]}'
+    )
+    with pytest.raises(InstanceError, match="source/sink"):
+        load(bad)
