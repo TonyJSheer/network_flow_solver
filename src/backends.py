@@ -31,7 +31,7 @@ class ApiFamily(Enum):
 class Backend:
     name: str
     family: ApiFamily
-    solver_type: object | None  # mathopt.SolverType for MATH_OPT; None for CP-SAT
+    solver_type: mathopt.SolverType | None  # MathOpt SolverType; None for CP-SAT
     continuous_flow: bool
     supports_lazy: bool
 
