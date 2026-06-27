@@ -176,7 +176,14 @@ def toy_instance() -> Instance:
 
 
 def _parse_regime(text: str) -> Regime:
-    return Regime[text.upper()]
+    """Parse a regime name (case-insensitive) to a Regime enum member."""
+    try:
+        return Regime[text.upper()]
+    except KeyError:
+        valid = [r.name.lower() for r in Regime]
+        raise argparse.ArgumentTypeError(
+            f"invalid regime {text!r}; choose from {valid}"
+        ) from None
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -185,7 +192,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=Path, default=Path("instances"))
     parser.add_argument("--regime", type=_parse_regime, default=None)
-    parser.add_argument("--size", type=int, default=None)
+    parser.add_argument("--size", type=int, default=None, choices=range(1, NUM_SIZES + 1))
     args = parser.parse_args(argv)
 
     args.out.mkdir(parents=True, exist_ok=True)
