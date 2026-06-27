@@ -181,9 +181,7 @@ def _parse_regime(text: str) -> Regime:
         return Regime[text.upper()]
     except KeyError:
         valid = [r.name.lower() for r in Regime]
-        raise argparse.ArgumentTypeError(
-            f"invalid regime {text!r}; choose from {valid}"
-        ) from None
+        raise argparse.ArgumentTypeError(f"invalid regime {text!r}; choose from {valid}") from None
 
 
 def main(argv: list[str] | None = None) -> None:
