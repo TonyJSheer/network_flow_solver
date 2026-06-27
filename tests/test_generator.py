@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import networkx as nx
 import numpy as np
 
@@ -8,14 +10,17 @@ from src.generator import (
     DUR_LO,
     MAX_JOBS_PER_ARC,
     MIN_JOBS_PER_ARC,
+    NUM_LISTS,
     NUM_SIZES,
     SIZE_SCHEDULE,
     Regime,
     _build_jobs_for_arc,
     _build_network,
     _derive_rng,
+    generate_instance,
+    generate_suite,
 )
-from src.instance import Arc
+from src.instance import Arc, Instance
 
 
 def test_regime_width_ranges() -> None:
@@ -92,3 +97,38 @@ def test_jobs_admit_a_nonoverlapping_schedule() -> None:
     last = jobs[-1]
     assert arc_horizon == last.deadline + last.duration - 1
     assert jobs[0].release >= 1
+
+
+def _assert_legal(inst: Instance, tmp_path: Path) -> None:
+    # load() runs the full structural validator and raises on any illegality.
+    out = tmp_path / f"{inst.name}.json"
+    inst.save(out)
+    from src.instance import load
+
+    reloaded = load(out)
+    assert reloaded == inst
+
+
+def test_every_generated_instance_is_legal(tmp_path: Path) -> None:
+    for size_idx in range(1, NUM_SIZES + 1):
+        for regime in Regime:
+            inst = generate_instance(size_idx, 0, regime, seed=0)
+            _assert_legal(inst, tmp_path)
+            assert inst.source == "s" and inst.sink == "t"
+            assert inst.known_optimum is None
+            assert inst.jobs  # non-empty
+            assert inst.horizon == max(j.deadline + j.duration - 1 for j in inst.jobs)
+
+
+def test_quick_small_sizes_are_legal_across_lists(tmp_path: Path) -> None:
+    # The --quick demo uses the small sizes; exercise them broadly.
+    for size_idx in (1, 2, 3):
+        for list_idx in range(NUM_LISTS):
+            for regime in Regime:
+                _assert_legal(generate_instance(size_idx, list_idx, regime, 0), tmp_path)
+
+
+def test_suite_yields_full_sweep() -> None:
+    names = [inst.name for inst in generate_suite(seed=0)]
+    assert len(names) == NUM_SIZES * NUM_LISTS * 3
+    assert len(set(names)) == len(names)  # unique names

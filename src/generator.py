@@ -9,11 +9,12 @@ latest start). All randomness derives from (seed, size_idx, list_idx, regime).
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from enum import Enum
 
 import numpy as np
 
-from src.instance import Arc, Job
+from src.instance import Arc, Instance, Job
 
 
 class Regime(Enum):
@@ -122,3 +123,37 @@ def _build_jobs_for_arc(
     last = jobs[-1]
     arc_horizon = last.deadline + last.duration - 1
     return jobs, arc_horizon
+
+
+def generate_instance(
+    size_idx: int, list_idx: int, regime: Regime, seed: int
+) -> Instance:
+    """Assemble one instance: layered network + per-arc jobs + fitted horizon."""
+    rng = _derive_rng(seed, size_idx, list_idx, regime)
+    nodes, arcs = _build_network(size_idx, rng)
+    jobs: list[Job] = []
+    horizon = 0
+    for arc in arcs:
+        arc_jobs, arc_horizon = _build_jobs_for_arc(arc, regime, rng)
+        jobs.extend(arc_jobs)
+        horizon = max(horizon, arc_horizon)
+    return Instance(
+        name=f"net{size_idx}-list{list_idx}-{regime.name.lower()}",
+        horizon=horizon,
+        source="s",
+        sink="t",
+        nodes=nodes,
+        arcs=arcs,
+        jobs=tuple(jobs),
+        seed=seed,
+        max_jobs_per_period=None,
+        known_optimum=None,
+    )
+
+
+def generate_suite(seed: int) -> Iterator[Instance]:
+    """Yield the full 8 sizes x 10 lists x 3 regimes sweep."""
+    for size_idx in range(1, NUM_SIZES + 1):
+        for list_idx in range(NUM_LISTS):
+            for regime in Regime:
+                yield generate_instance(size_idx, list_idx, regime, seed)
