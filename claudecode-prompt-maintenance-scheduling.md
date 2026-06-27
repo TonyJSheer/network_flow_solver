@@ -57,7 +57,7 @@ Backends to support/explore: **CP-SAT, SCIP, HiGHS**, with **Gurobi optional** (
 - The solver-selection interface from Stages 2-3 already abstracts the backend; here, exercise it as a comparison matrix: tabulate the evaluation/subproblem and master solves across **CP-SAT, SCIP, HiGHS** (and Gurobi if licensed) on a fixed instance set. This evidences the "split-solver: open MIP backend for the master, free/fast LP for the evaluation flood" architecture point — and shows the demo is not tied to any single (licensed) solver.
 
 ## Tech constraints
-- Python 3.11+. Deps: `ortools` (provides CP-SAT, MathOpt, and the bundled SCIP/HiGHS backends), `networkx`, `numpy`, `matplotlib`, `pytest`. Gurobi is **optional** and only used if a license is present — never a hard dependency.
+- Python 3.12+. Deps: `ortools` (provides CP-SAT, MathOpt, and the bundled SCIP/HiGHS backends), `networkx`, `numpy`, `matplotlib`, `pytest`. Gurobi is **optional** and only used if a license is present — never a hard dependency.
 - `--solver-check` helper that reports which backends are actually available at runtime (CP-SAT and the MathOpt-bundled SCIP/HiGHS should always be; Gurobi only if licensed) and fails clearly if a requested backend is missing. Never hardcode any solver license/keys.
 - `pyproject.toml` or `requirements.txt`; `README.md` with exact run commands.
 - Type hints, docstrings stating the math, `pytest` covering the toy instance (known optimum) for both methods — they MUST agree on the toy instance, and results MUST agree across backends.

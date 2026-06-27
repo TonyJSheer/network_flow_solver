@@ -2,7 +2,7 @@
 name = "network-flow-solver"
 version = "0.1.0"
 description = "Network maintenance scheduling: direct MIP vs disaggregated Benders (OR-Tools)."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "ortools>=9.10",
     "networkx>=3.2",

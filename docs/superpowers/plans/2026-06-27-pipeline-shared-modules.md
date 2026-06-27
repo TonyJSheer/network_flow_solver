@@ -6,13 +6,13 @@
 
 **Architecture:** Three independent, dependency-light modules behind stable contracts. `instance.py` is the data model (frozen dataclasses + JSON load/save + `nx.DiGraph` builder); `result.py` is the normalized result record (`Result` + `SolveStatus`); `backends.py` resolves a `--backend` name to an API family + two capability flags, building no models. No solver formulations in this plan — those are later stages that consume these three modules through a uniform `solve(instance, backend, *, time_limit_s) -> Result` signature.
 
-**Tech Stack:** Python 3.11+, `uv`, `ortools` (CP-SAT + MathOpt), `networkx`, `numpy`, `matplotlib`, `pytest`, `ruff`, `mypy`.
+**Tech Stack:** Python 3.12+, `uv`, `ortools` (CP-SAT + MathOpt), `networkx`, `numpy`, `matplotlib`, `pytest`, `ruff`, `mypy`.
 
 **Source spec:** `docs/superpowers/specs/2026-06-27-pipeline-data-model-and-interfaces-design.md`
 
 ## Global Constraints
 
-- Python 3.11+. Run Python only through `uv` — never bare `python3`.
+- Python 3.12+. Run Python only through `uv` — never bare `python3`.
 - Dependencies limited to the declared set: `ortools`, `networkx`, `numpy`, `matplotlib`, `pytest` (+ `ruff`, `mypy` dev). No additions without justification.
 - Gurobi is **optional** — never a hard dependency; never hardcode any solver license/keys.
 - Type annotations on every function; `mypy --strict` clean; `ruff check` + `ruff format --check` clean.
@@ -42,7 +42,7 @@
 name = "network-flow-solver"
 version = "0.1.0"
 description = "Network maintenance scheduling: direct MIP vs disaggregated Benders (OR-Tools)."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "ortools>=9.10",
     "networkx>=3.2",
@@ -65,7 +65,7 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "ANN"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 
 [[tool.mypy.overrides]]
