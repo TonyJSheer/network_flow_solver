@@ -20,8 +20,8 @@ Formulation (docs/superpowers/specs/2026-06-27-direct-mip-formulation-design.md)
   objective
     max sum_t f[r,t]   flow on return arc r = (sink, source) = total throughput
 
-Backend note: only continuous-flow MathOpt backends (scip / highs / cp-sat-m /
-gurobi) are wired here. The native CP-SAT integer build is Stage 2.1.
+Backend note: MathOpt backends here use continuous flow vars; the native CP-SAT
+integer-flow build is Stage 2.1.
 """
 
 from __future__ import annotations
@@ -50,7 +50,9 @@ def solve_direct_mip(
 
 
 def _solve_mathopt(instance: Instance, backend: Backend, time_limit_s: float | None) -> Result:
-    assert backend.solver_type is not None  # every MathOpt backend has a SolverType
+    # every MathOpt backend has a SolverType; this guards the type narrowing below
+    if backend.solver_type is None:
+        raise ValueError(f"backend {backend.name!r} has no MathOpt SolverType")
     periods = range(1, instance.horizon + 1)
     model = mathopt.Model(name=f"direct_mip:{instance.name}")
 
@@ -60,6 +62,10 @@ def _solve_mathopt(instance: Instance, backend: Backend, time_limit_s: float | N
     # bounds enforce the plain capacity limit f[a,t] <= cap_a for all arcs.
     return_cap = sum(a.capacity for a in instance.arcs if a.u == instance.source)
     arc_caps: dict[tuple[str, str], int] = {(a.u, a.v): a.capacity for a in instance.arcs}
+    if (instance.sink, instance.source) in arc_caps:
+        raise ValueError(
+            "instance declares a real (sink, source) arc; that key is reserved for the return arc"
+        )
     arc_caps[(instance.sink, instance.source)] = return_cap
     f: dict[tuple[str, str, int], mathopt.Variable] = {}
     for (u, v), cap in arc_caps.items():
@@ -166,6 +172,7 @@ def _to_result(
 
     primal = result.objective_value()
     dual = result.best_objective_bound()
+    # gap denominates by incumbent |primal| rather than |dual|, for divide-by-zero safety
     gap = abs(primal - dual) / (abs(primal) + 1e-10)
     return Result(
         method="direct_mip",

@@ -84,8 +84,7 @@ def test_arc_endpoint_not_in_nodes_rejected(tmp_path: Path) -> None:
 def test_source_or_sink_not_in_nodes_rejected(tmp_path: Path) -> None:
     bad = tmp_path / "badsrc.json"
     bad.write_text(
-        '{"name":"b","horizon":3,"source":"s","sink":"q","nodes":["s","t"],'
-        '"arcs":[],"jobs":[]}'
+        '{"name":"b","horizon":3,"source":"s","sink":"q","nodes":["s","t"],"arcs":[],"jobs":[]}'
     )
     with pytest.raises(InstanceError, match="source/sink"):
         load(bad)
