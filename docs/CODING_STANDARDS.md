@@ -49,7 +49,7 @@ Always run Python through `uv` (`uv run python ...`, `uv run pytest`), never bar
 ```toml
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

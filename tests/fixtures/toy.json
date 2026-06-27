@@ -1,0 +1,17 @@
+{
+  "name": "toy",
+  "seed": 42,
+  "horizon": 6,
+  "source": "s",
+  "sink": "t",
+  "max_jobs_per_period": null,
+  "nodes": ["s", "a", "t"],
+  "arcs": [
+    {"u": "s", "v": "a", "capacity": 3},
+    {"u": "a", "v": "t", "capacity": 2}
+  ],
+  "jobs": [
+    {"id": "j0", "arc": ["a", "t"], "duration": 2, "release": 1, "deadline": 5}
+  ],
+  "known_optimum": 8
+}
