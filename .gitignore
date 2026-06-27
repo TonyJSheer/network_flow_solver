@@ -26,6 +26,7 @@ htmlcov/
 .ruff_cache/
 
 # Generated experiment artefacts (regenerate via run.py / generator)
+instances/
 results/
 *.csv
 *.png
