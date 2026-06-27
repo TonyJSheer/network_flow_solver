@@ -11,7 +11,7 @@ import pytest
 
 from src.backends import resolve
 from src.direct_mip import solve_direct_mip
-from src.generator import toy_instance
+from src.generator import Regime, generate_instance, toy_instance
 from src.result import SolveStatus
 
 
@@ -47,3 +47,30 @@ def test_k_one_keeps_toy_optimum() -> None:
 
     assert res.status is SolveStatus.OPTIMAL
     assert res.objective == pytest.approx(8.0)
+
+
+@pytest.mark.parametrize("backend_name", ["highs", "scip", "cp-sat-m"])
+def test_backends_agree_on_toy(backend_name: str) -> None:
+    res = solve_direct_mip(toy_instance(), resolve(backend_name))
+    assert res.status is SolveStatus.OPTIMAL
+    assert res.objective == pytest.approx(8.0)
+
+
+def test_backends_agree_on_generated_instance() -> None:
+    # Smallest size, tight window => fast; all MathOpt backends must agree on the
+    # optimum (we compare objective + status, not the schedule: see the
+    # multi-optimum cross-check note).
+    inst = generate_instance(size_idx=1, list_idx=0, regime=Regime.TIGHT, seed=7)
+    objectives: list[float] = []
+    for name in ("highs", "scip", "cp-sat-m"):
+        res = solve_direct_mip(inst, resolve(name), time_limit_s=60.0)
+        assert res.status is SolveStatus.OPTIMAL
+        assert res.objective is not None
+        objectives.append(res.objective)
+    assert objectives[0] == pytest.approx(objectives[1])
+    assert objectives[1] == pytest.approx(objectives[2])
+
+
+def test_native_cp_sat_is_deferred_to_stage_2_1() -> None:
+    with pytest.raises(NotImplementedError, match="Stage 2.1"):
+        solve_direct_mip(toy_instance(), resolve("cp-sat"))
