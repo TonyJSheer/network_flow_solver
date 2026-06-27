@@ -20,7 +20,7 @@ from src.generator import (
     generate_instance,
     generate_suite,
 )
-from src.instance import Arc, Instance
+from src.instance import Arc, Instance, load
 
 
 def test_regime_width_ranges() -> None:
@@ -103,8 +103,6 @@ def _assert_legal(inst: Instance, tmp_path: Path) -> None:
     # load() runs the full structural validator and raises on any illegality.
     out = tmp_path / f"{inst.name}.json"
     inst.save(out)
-    from src.instance import load
-
     reloaded = load(out)
     assert reloaded == inst
 

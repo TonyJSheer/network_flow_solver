@@ -132,11 +132,10 @@ def generate_instance(
     rng = _derive_rng(seed, size_idx, list_idx, regime)
     nodes, arcs = _build_network(size_idx, rng)
     jobs: list[Job] = []
-    horizon = 0
     for arc in arcs:
-        arc_jobs, arc_horizon = _build_jobs_for_arc(arc, regime, rng)
+        arc_jobs, _ = _build_jobs_for_arc(arc, regime, rng)
         jobs.extend(arc_jobs)
-        horizon = max(horizon, arc_horizon)
+    horizon = max(j.deadline + j.duration - 1 for j in jobs)
     return Instance(
         name=f"net{size_idx}-list{list_idx}-{regime.name.lower()}",
         horizon=horizon,
