@@ -1,7 +1,10 @@
 # Architecture
 
-**network_flow_solver** — design intent. (No code yet; this documents the planned shape
-from `claudecode-prompt-maintenance-scheduling.md`. Keep it in sync as code lands.)
+**network_flow_solver** — design intent. The shared spine has landed — `src/instance.py`
+(data model), `src/result.py` (result record), and `src/backends.py` (solver-selection
+interface); the solver formulations, generator, and `run.py` are still planned. See
+`docs/superpowers/specs/2026-06-27-pipeline-data-model-and-interfaces-design.md` for the
+spine's design. Keep this doc in sync as the remaining stages land.
 
 ---
 

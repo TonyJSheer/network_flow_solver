@@ -9,20 +9,25 @@ following Pearce & Forbes (2019; preprint arXiv:1603.02378).
 It's built to be read aloud and whiteboarded, so the formulations are explicit and heavily
 commented rather than clever.
 
-> **Status:** scaffolding only — standards, docs, and tooling are in place; no solver code
-> yet. The build is staged (see the task spec).
+> **Status:** the shared **spine** is in place — the instance data model (`src/instance.py`),
+> the result record (`src/result.py`), and the backend-selection interface (`src/backends.py`),
+> with tooling and a passing test suite. The solver stages (generator, direct MIP, Benders,
+> benchmark) are next. The build is staged (see the task spec).
 
 ## Quick start
 
-> These commands describe the intended interface; they'll work once Stage 1+ lands.
-
 ```bash
 uv sync                                 # install dependencies
-uv run python run.py --solver-check     # report which solver backends are available
-uv run python run.py --quick            # run the demo end-to-end → comparison chart
-uv run python run.py --backend cp-sat   # pick a backend: cp-sat | scip | highs | gurobi
-uv run pytest                           # tests (toy instance with a known optimum)
+uv run pytest                           # tests (spine modules; 19 passing)
 ```
+
+> The `run.py` entry point and its flags arrive with the later stages:
+>
+> ```bash
+> uv run python run.py --solver-check     # report which solver backends are available
+> uv run python run.py --quick            # run the demo end-to-end → comparison chart
+> uv run python run.py --backend cp-sat   # pick a backend: cp-sat | scip | highs | gurobi
+> ```
 
 Solving runs on **Google OR-Tools** behind a thin `--backend` interface: **CP-SAT**
 (default) plus **SCIP** and **HiGHS** are always available; **Gurobi** is used only if a
@@ -40,7 +45,9 @@ license is present and is never a hard dependency. No license or keys are hardco
 | `docs/task_spec_template.md` | Lightweight format for scoping a stage or change |
 | `.claude/commands/` | Slash commands: `/test`, `/lint`, `/typecheck`, `/inspect-package` |
 
-`src/` (the solvers), `tests/`, and `run.py` arrive with the staged build.
+`src/` now holds the shared spine — `instance.py` (data model), `result.py` (result record),
+`backends.py` (solver-selection interface) — with `tests/` covering them. The solver
+formulations and `run.py` arrive with the later stages.
 
 ## How this repo is developed
 
