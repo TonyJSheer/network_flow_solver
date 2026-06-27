@@ -19,6 +19,7 @@ from src.generator import (
     _derive_rng,
     generate_instance,
     generate_suite,
+    main,
 )
 from src.instance import Arc, Instance
 from src.instance import load as load_instance
@@ -140,3 +141,13 @@ def test_toy_instance_matches_committed_fixture() -> None:
     inst = toy_instance()
     assert inst == load_instance(fixture)
     assert inst.known_optimum == 8
+
+
+def test_cli_writes_filtered_instances(tmp_path: Path) -> None:
+    out = tmp_path / "instances"
+    main(["--seed", "0", "--out", str(out), "--size", "1", "--regime", "wide"])
+    files = sorted(p.name for p in out.glob("*.json"))
+    assert files == [f"net1-list{i}-wide.json" for i in range(NUM_LISTS)]
+    # written files are valid instances
+    for p in out.glob("*.json"):
+        load_instance(p)

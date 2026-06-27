@@ -9,8 +9,10 @@ latest start). All randomness derives from (seed, size_idx, list_idx, regime).
 
 from __future__ import annotations
 
+import argparse
 from collections.abc import Iterator
 from enum import Enum
+from pathlib import Path
 
 import numpy as np
 
@@ -50,9 +52,7 @@ NUM_SIZES = 8
 NUM_LISTS = 10
 
 
-def _derive_rng(
-    seed: int, size_idx: int, list_idx: int, regime: Regime
-) -> np.random.Generator:
+def _derive_rng(seed: int, size_idx: int, list_idx: int, regime: Regime) -> np.random.Generator:
     """Independent, reproducible RNG stream keyed by the instance coordinates."""
     regime_code = list(Regime).index(regime)
     return np.random.default_rng([seed, size_idx, list_idx, regime_code])
@@ -63,9 +63,7 @@ def _build_network(
 ) -> tuple[tuple[str, ...], tuple[Arc, ...]]:
     """Layered DAG: s -> L layers of width W -> t, full bipartite between layers."""
     num_layers, width = SIZE_SCHEDULE[size_idx - 1]
-    layers: list[list[str]] = [
-        [f"L{i}_{w}" for w in range(width)] for i in range(num_layers)
-    ]
+    layers: list[list[str]] = [[f"L{i}_{w}" for w in range(width)] for i in range(num_layers)]
     nodes: list[str] = ["s"]
     for layer in layers:
         nodes.extend(layer)
@@ -125,9 +123,7 @@ def _build_jobs_for_arc(
     return jobs, arc_horizon
 
 
-def generate_instance(
-    size_idx: int, list_idx: int, regime: Regime, seed: int
-) -> Instance:
+def generate_instance(size_idx: int, list_idx: int, regime: Regime, seed: int) -> Instance:
     """Assemble one instance: layered network + per-arc jobs + fitted horizon."""
     rng = _derive_rng(seed, size_idx, list_idx, regime)
     nodes, arcs = _build_network(size_idx, rng)
@@ -177,3 +173,30 @@ def toy_instance() -> Instance:
         max_jobs_per_period=None,
         known_optimum=8,
     )
+
+
+def _parse_regime(text: str) -> Regime:
+    return Regime[text.upper()]
+
+
+def main(argv: list[str] | None = None) -> None:
+    """CLI: emit instance JSON files into --out (default ./instances)."""
+    parser = argparse.ArgumentParser(description="Generate scheduling instances.")
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--out", type=Path, default=Path("instances"))
+    parser.add_argument("--regime", type=_parse_regime, default=None)
+    parser.add_argument("--size", type=int, default=None)
+    args = parser.parse_args(argv)
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    sizes = [args.size] if args.size is not None else range(1, NUM_SIZES + 1)
+    regimes = [args.regime] if args.regime is not None else list(Regime)
+    for size_idx in sizes:
+        for list_idx in range(NUM_LISTS):
+            for regime in regimes:
+                inst = generate_instance(size_idx, list_idx, regime, args.seed)
+                inst.save(args.out / f"{inst.name}.json")
+
+
+if __name__ == "__main__":
+    main()
