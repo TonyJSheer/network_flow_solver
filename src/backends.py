@@ -42,6 +42,8 @@ class Backend:
 # Confirmed SolverType names from installed ortools: GSCIP, HIGHS, GUROBI.
 _REGISTRY: dict[str, Backend] = {
     "cp-sat": Backend("cp-sat", ApiFamily.CP_SAT, None, False, False),
+    # Manually added, interesting test case to compare performance.
+    "cp-sat-m": Backend("cp-sat-m", ApiFamily.MATH_OPT, mathopt.SolverType.CP_SAT, False, False),
     "scip": Backend("scip", ApiFamily.MATH_OPT, mathopt.SolverType.GSCIP, True, False),
     "highs": Backend("highs", ApiFamily.MATH_OPT, mathopt.SolverType.HIGHS, True, False),
     "gurobi": Backend("gurobi", ApiFamily.MATH_OPT, mathopt.SolverType.GUROBI, True, False),
@@ -53,9 +55,7 @@ def resolve(name: str) -> Backend:
     try:
         backend = _REGISTRY[name]
     except KeyError:
-        raise BackendError(
-            f"unknown backend {name!r}; choose from {sorted(_REGISTRY)}"
-        ) from None
+        raise BackendError(f"unknown backend {name!r}; choose from {sorted(_REGISTRY)}") from None
     if backend.name == "gurobi" and not _gurobi_available():
         raise BackendError("backend 'gurobi' is unavailable: no usable license found")
     return backend
