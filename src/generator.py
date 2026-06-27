@@ -81,8 +81,6 @@ def _build_network(
                 arcs.append(Arc(u, v, cap()))
     for node in layers[-1]:  # last layer into sink
         arcs.append(Arc(node, "t", cap()))
-    for i in range(num_layers - 2):  # a few skip arcs for irregular cuts
-        arcs.append(Arc(layers[i][0], layers[i + 2][0], cap()))
 
     return tuple(nodes), tuple(arcs)
 
