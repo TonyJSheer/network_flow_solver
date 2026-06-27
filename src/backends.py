@@ -51,11 +51,14 @@ _REGISTRY: dict[str, Backend] = {
 def resolve(name: str) -> Backend:
     """Look up a backend by ``--backend`` name."""
     try:
-        return _REGISTRY[name]
+        backend = _REGISTRY[name]
     except KeyError:
         raise BackendError(
             f"unknown backend {name!r}; choose from {sorted(_REGISTRY)}"
         ) from None
+    if backend.name == "gurobi" and not _gurobi_available():
+        raise BackendError("backend 'gurobi' is unavailable: no usable license found")
+    return backend
 
 
 def available_backends() -> list[Backend]:

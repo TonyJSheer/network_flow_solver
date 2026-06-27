@@ -31,3 +31,16 @@ def test_available_backends_always_includes_cpsat_scip_highs() -> None:
 
 def test_available_backends_returns_backend_objects() -> None:
     assert all(isinstance(b, Backend) for b in available_backends())
+
+
+def test_resolve_gurobi_unavailable_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.backends._gurobi_available", lambda: False)
+    with pytest.raises(BackendError, match="unavailable"):
+        resolve("gurobi")
+
+
+def test_resolve_gurobi_available_returns_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.backends._gurobi_available", lambda: True)
+    b = resolve("gurobi")
+    assert b.name == "gurobi"
+    assert b.family is ApiFamily.MATH_OPT
