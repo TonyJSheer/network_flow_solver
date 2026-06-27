@@ -230,9 +230,14 @@ this uniform signature. Everything else depends only on those.
 ## Testing implications
 
 - **Toy instance:** known-answer test against `known_optimum`.
-- **Above toy scale:** correctness is mutual agreement — direct MIP and Benders must return
-  the same `(objective, status, schedule)`, and backends must agree, on any instance both
-  solve to optimality.
+- **Above toy scale:** correctness is mutual agreement — direct MIP and Benders, and
+  different backends, must agree on any instance both solve to optimality.
+  - **Agree on `objective` and `status` strictly.** Do **not** assert `schedule` equality:
+    maintenance instances routinely have multiple optimal schedules with identical objective,
+    so CP-SAT / SCIP / HiGHS will legitimately return *different* `schedule` dicts at the same
+    optimum. A strict `schedule ==` cross-check would flake. Instead validate each returned
+    schedule independently — feasible and achieving the agreed objective — rather than
+    identical across methods/backends. (Stage 2/3 test authors: bake this in from the start.)
 - Status normalization is itself worth a small unit test per backend (native code →
   `SolveStatus`).
 
