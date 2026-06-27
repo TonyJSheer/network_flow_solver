@@ -4,12 +4,18 @@ import numpy as np
 from src.generator import (
     CAP_HI,
     CAP_LO,
+    DUR_HI,
+    DUR_LO,
+    MAX_JOBS_PER_ARC,
+    MIN_JOBS_PER_ARC,
     NUM_SIZES,
     SIZE_SCHEDULE,
     Regime,
+    _build_jobs_for_arc,
     _build_network,
     _derive_rng,
 )
+from src.instance import Arc
 
 
 def test_regime_width_ranges() -> None:
@@ -60,3 +66,29 @@ def test_network_arc_count_is_nondecreasing() -> None:
         _, arcs = _build_network(size_idx, _derive_rng(0, size_idx, 0, Regime.MEDIUM))
         counts.append(len(arcs))
     assert counts == sorted(counts)
+
+
+def test_jobs_respect_paper_parameter_ranges() -> None:
+    arc = Arc("u", "v", 50)
+    for regime in Regime:
+        lo, hi = regime.width_range
+        rng = _derive_rng(0, 5, 2, regime)
+        jobs, _ = _build_jobs_for_arc(arc, regime, rng)
+        assert MIN_JOBS_PER_ARC <= len(jobs) <= MAX_JOBS_PER_ARC
+        for j in jobs:
+            assert j.arc == ("u", "v")
+            assert DUR_LO <= j.duration <= DUR_HI
+            width = j.deadline - j.release + 1  # number of legal start times
+            assert lo <= width <= hi
+
+
+def test_jobs_admit_a_nonoverlapping_schedule() -> None:
+    # Even the worst case (every job at its LATEST start) must not overlap.
+    arc = Arc("u", "v", 50)
+    jobs, arc_horizon = _build_jobs_for_arc(arc, Regime.WIDE, _derive_rng(0, 8, 0, Regime.WIDE))
+    for prev, nxt in zip(jobs, jobs[1:], strict=False):
+        prev_latest_completion = prev.deadline + prev.duration - 1
+        assert prev_latest_completion < nxt.release
+    last = jobs[-1]
+    assert arc_horizon == last.deadline + last.duration - 1
+    assert jobs[0].release >= 1

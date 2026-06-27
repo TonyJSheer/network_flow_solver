@@ -13,7 +13,7 @@ from enum import Enum
 
 import numpy as np
 
-from src.instance import Arc
+from src.instance import Arc, Job
 
 
 class Regime(Enum):
@@ -86,3 +86,39 @@ def _build_network(
         arcs.append(Arc(layers[i][0], layers[i + 2][0], cap()))
 
     return tuple(nodes), tuple(arcs)
+
+
+def _build_jobs_for_arc(
+    arc: Arc, regime: Regime, rng: np.random.Generator
+) -> tuple[list[Job], int]:
+    """Lay jobs out sequentially so even all-latest starts never overlap.
+
+    Job k gets `release_k`; `deadline_k = release_k + width_k - 1` so it has
+    exactly `width_k` legal start positions. The next job's release sits past
+    the current job's latest completion (`deadline + duration - 1`), guaranteeing
+    the no-overlap-per-arc assumption is satisfiable for any choice of starts.
+    """
+    lo, hi = regime.width_range
+    n_jobs = int(rng.integers(MIN_JOBS_PER_ARC, MAX_JOBS_PER_ARC + 1))
+    jobs: list[Job] = []
+    cursor = 1  # earliest release (periods are 1-indexed)
+    for k in range(n_jobs):
+        duration = int(rng.integers(DUR_LO, DUR_HI + 1))
+        width = int(rng.integers(lo, hi + 1))  # number of legal start times
+        release = cursor
+        deadline = release + width - 1  # latest start
+        jobs.append(
+            Job(
+                id=f"{arc.u}->{arc.v}#{k}",
+                arc=(arc.u, arc.v),
+                duration=duration,
+                release=release,
+                deadline=deadline,
+            )
+        )
+        latest_completion = deadline + duration - 1
+        gap = int(rng.integers(0, 4))  # small slack between consecutive jobs
+        cursor = latest_completion + 1 + gap
+    last = jobs[-1]
+    arc_horizon = last.deadline + last.duration - 1
+    return jobs, arc_horizon
