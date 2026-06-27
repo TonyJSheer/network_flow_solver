@@ -1,0 +1,38 @@
+[project]
+name = "network-flow-solver"
+version = "0.1.0"
+description = "Network maintenance scheduling: direct MIP vs disaggregated Benders (OR-Tools)."
+requires-python = ">=3.11"
+dependencies = [
+    "ortools>=9.10",
+    "networkx>=3.2",
+    "numpy>=1.26",
+    "matplotlib>=3.8",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ANN"]
+
+[tool.mypy]
+# Set to 3.12 to match the resolved interpreter; numpy 2.x stubs use the
+# `type` statement (PEP 695) which requires >= 3.12 to parse.
+python_version = "3.12"
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["networkx.*", "ortools.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
