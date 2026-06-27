@@ -13,6 +13,8 @@ from enum import Enum
 
 import numpy as np
 
+from src.instance import Arc
+
 
 class Regime(Enum):
     """Window regime = number of legal start times per job (lo, hi)."""
@@ -53,3 +55,34 @@ def _derive_rng(
     """Independent, reproducible RNG stream keyed by the instance coordinates."""
     regime_code = list(Regime).index(regime)
     return np.random.default_rng([seed, size_idx, list_idx, regime_code])
+
+
+def _build_network(
+    size_idx: int, rng: np.random.Generator
+) -> tuple[tuple[str, ...], tuple[Arc, ...]]:
+    """Layered DAG: s -> L layers of width W -> t, full bipartite between layers."""
+    num_layers, width = SIZE_SCHEDULE[size_idx - 1]
+    layers: list[list[str]] = [
+        [f"L{i}_{w}" for w in range(width)] for i in range(num_layers)
+    ]
+    nodes: list[str] = ["s"]
+    for layer in layers:
+        nodes.extend(layer)
+    nodes.append("t")
+
+    def cap() -> int:
+        return int(rng.integers(CAP_LO, CAP_HI + 1))
+
+    arcs: list[Arc] = []
+    for node in layers[0]:  # source into first layer
+        arcs.append(Arc("s", node, cap()))
+    for i in range(num_layers - 1):  # full bipartite between adjacent layers
+        for u in layers[i]:
+            for v in layers[i + 1]:
+                arcs.append(Arc(u, v, cap()))
+    for node in layers[-1]:  # last layer into sink
+        arcs.append(Arc(node, "t", cap()))
+    for i in range(num_layers - 2):  # a few skip arcs for irregular cuts
+        arcs.append(Arc(layers[i][0], layers[i + 2][0], cap()))
+
+    return tuple(nodes), tuple(arcs)
