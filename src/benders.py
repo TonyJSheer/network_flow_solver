@@ -84,6 +84,17 @@ def _build_master_mathopt(instance: Instance, ub: int) -> _Master:
     theta: dict[int, mathopt.Variable] = {
         t: model.add_variable(lb=0.0, ub=float(ub), name=f"theta[{t}]") for t in periods
     }
+
+    # Optional <=K constraint: at most K jobs in progress simultaneously per period.
+    # This lives in the master only (it constrains the schedule, not the subproblem).
+    if instance.max_jobs_per_period is not None:
+        cap_k = instance.max_jobs_per_period
+        for t in periods:
+            total = sum(
+                (in_progress(j, t) for j in instance.jobs), start=mathopt.LinearExpression()
+            )
+            model.add_linear_constraint(total <= cap_k)
+
     model.maximize(sum((theta[t] for t in periods), start=mathopt.LinearExpression()))
     return _Master(model=model, x=x, y=y, theta=theta, starts=starts)
 
@@ -123,6 +134,14 @@ def _build_master_cpsat(instance: Instance, ub: int) -> _MasterCp:
                 model.add(yvar <= 1 - in_progress(j, t))
 
     theta = {t: model.new_int_var(0, ub, f"theta[{t}]") for t in periods}
+
+    # Optional <=K constraint: at most K jobs in progress simultaneously per period.
+    # This lives in the master only (it constrains the schedule, not the subproblem).
+    if instance.max_jobs_per_period is not None:
+        cap_k = instance.max_jobs_per_period
+        for t in periods:
+            model.add(cp_model.LinearExpr.sum([in_progress(j, t) for j in instance.jobs]) <= cap_k)
+
     model.maximize(cp_model.LinearExpr.sum([theta[t] for t in periods]))
     return _MasterCp(model=model, x=x, y=y, theta=theta, starts=starts)
 

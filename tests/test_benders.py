@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from src.backends import resolve
 from src.benders import _full_capacity_maxflow, solve_benders
 from src.direct_mip import solve_direct_mip
-from src.generator import toy_instance
+from src.generator import Regime, generate_instance, toy_instance
 from src.result import SolveStatus
 
 
@@ -54,3 +56,25 @@ def test_lazy_reaches_toy_optimum_scip() -> None:
     assert res.status is SolveStatus.OPTIMAL
     assert res.objective == pytest.approx(8.0)
     assert res.cut_count is not None and res.cut_count >= 1
+
+
+@pytest.mark.parametrize("backend_name", ["highs", "scip", "cp-sat-m", "cp-sat"])
+def test_benders_backends_agree_on_toy(backend_name: str) -> None:
+    res = solve_benders(toy_instance(), resolve(backend_name))
+    assert res.status is SolveStatus.OPTIMAL
+    assert res.objective == pytest.approx(8.0)
+
+
+def test_benders_matches_direct_mip_on_generated_instance() -> None:
+    inst = generate_instance(size_idx=1, list_idx=0, regime=Regime.TIGHT, seed=7)
+    b = solve_benders(inst, resolve("cp-sat"), time_limit_s=60.0)
+    d = solve_direct_mip(inst, resolve("cp-sat"), time_limit_s=60.0)
+    assert b.status is d.status is SolveStatus.OPTIMAL
+    assert b.objective == pytest.approx(d.objective)
+
+
+def test_benders_k_one_keeps_toy_optimum() -> None:
+    inst = replace(toy_instance(), max_jobs_per_period=1)
+    res = solve_benders(inst, resolve("highs"))
+    assert res.status is SolveStatus.OPTIMAL
+    assert res.objective == pytest.approx(8.0)
