@@ -96,3 +96,14 @@ def test_benders_k_zero_infeasible_cpsat() -> None:
     res = solve_benders(inst, resolve("cp-sat"))
     assert res.status is SolveStatus.INFEASIBLE
     assert res.objective is None
+
+
+def test_precuts_give_bottleneck_and_reach_optimum() -> None:
+    from src.benders import _bottleneck_precuts
+
+    cuts = _bottleneck_precuts(toy_instance())
+    # the single bottleneck cut-set is arc (a,t) cap 2
+    assert any(c.coeffs == {("a", "t"): 2} for c in cuts)
+    res = solve_benders(toy_instance(), resolve("highs"), pre_cuts=True)
+    assert res.status is SolveStatus.OPTIMAL
+    assert res.objective == pytest.approx(8.0)

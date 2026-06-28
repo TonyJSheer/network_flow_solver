@@ -146,6 +146,49 @@ def _build_master_cpsat(instance: Instance, ub: int) -> _MasterCp:
     return _MasterCp(model=model, x=x, y=y, theta=theta, starts=starts)
 
 
+def _bottleneck_precuts(instance: Instance) -> list[PeriodCut]:
+    """Peel min-cut-sets from the full-capacity network (Pearce & Forbes §3.1).
+
+    Returns the distinct cut-sets found before the source-incident cut binds.
+    These cuts are period-independent: the same set applies to every period t.
+    """
+    caps = {(a.u, a.v): a.capacity for a in instance.arcs}
+    # Capacity large enough to "open" a bottleneck arc without becoming a new min-cut.
+    big = sum(c for (u, v), c in caps.items() if u == instance.source) + 1
+    cuts: list[PeriodCut] = []
+    seen: set[frozenset[tuple[str, str]]] = set()
+    for _ in range(len(caps)):
+        g: nx.DiGraph = nx.DiGraph()
+        for (u, v), cap in caps.items():
+            g.add_edge(u, v, capacity=cap)
+        value, (reachable, _) = nx.minimum_cut(g, instance.source, instance.sink)
+        crossing = {(u, v) for (u, v) in caps if u in reachable and v not in reachable}
+        key = frozenset(crossing)
+        if key in seen:
+            break
+        seen.add(key)
+        cuts.append(PeriodCut(flow_value=int(value), coeffs={a: caps[a] for a in crossing}))
+        if all(u == instance.source for (u, v) in crossing):
+            break  # source-incident cut binds; no tighter bottleneck to find
+        for a in crossing:
+            caps[a] = big  # relax this bottleneck and search for the next
+    return cuts
+
+
+def _precut_constraints_mathopt(
+    master: _Master,
+    arcs_with_jobs: frozenset[tuple[str, str]],
+    periods: range,
+    cuts: list[PeriodCut],
+) -> None:
+    """Add period-independent bottleneck pre-cuts to the MathOpt master before first solve."""
+    for t in periods:
+        for cut in cuts:
+            master.model.add_linear_constraint(
+                master.theta[t] <= _cut_rhs_mathopt(master, arcs_with_jobs, t, cut)
+            )
+
+
 def _solve_loop_cpsat(
     instance: Instance, backend: Backend, time_limit_s: float | None, *, pre_cuts: bool
 ) -> Result:
@@ -157,6 +200,21 @@ def _solve_loop_cpsat(
     periods = range(1, instance.horizon + 1)
     solver = cp_model.CpSolver()
     solver.parameters.num_workers = NUM_THREADS
+
+    # Warm start: inject period-independent bottleneck pre-cuts before first solve.
+    # These are valid inequalities (theta_t <= sum cap_a*y[a,t] for each min-cut-set)
+    # so they never cut off the optimal solution.
+    if pre_cuts:
+        for cut in _bottleneck_precuts(instance):
+            for t in periods:
+                rhs_pre: list[cp_model.LinearExpr] = []
+                const_pre = 0
+                for arc, cap in cut.coeffs.items():
+                    if arc in arcs_with_jobs:
+                        rhs_pre.append(cap * master.y[(arc, t)])
+                    else:
+                        const_pre += cap
+                master.model.add(master.theta[t] <= cp_model.LinearExpr.sum(rhs_pre) + const_pre)
 
     iterations = 0
     cut_count = 0
@@ -270,6 +328,11 @@ def _solve_loop_mathopt(
     arcs_with_jobs = frozenset(_jobs_on_arc(instance))
     periods = range(1, instance.horizon + 1)
 
+    # Warm start: inject period-independent bottleneck pre-cuts before first solve.
+    # These are valid inequalities so they never cut off the optimal solution.
+    if pre_cuts:
+        _precut_constraints_mathopt(master, arcs_with_jobs, periods, _bottleneck_precuts(instance))
+
     iterations = 0
     cut_count = 0
     schedule: dict[str, int] = {}
@@ -342,6 +405,12 @@ def _solve_lazy_mathopt(
     evaluator = MinCutEvaluator(instance)
     arcs_with_jobs = frozenset(_jobs_on_arc(instance))
     periods = range(1, instance.horizon + 1)
+
+    # Warm start: inject period-independent bottleneck pre-cuts before first solve.
+    # These are valid inequalities so they never cut off the optimal solution.
+    if pre_cuts:
+        _precut_constraints_mathopt(master, arcs_with_jobs, periods, _bottleneck_precuts(instance))
+
     cut_count = 0
 
     def on_incumbent(data: cb.CallbackData) -> cb.CallbackResult:
