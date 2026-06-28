@@ -8,6 +8,8 @@ dependencies = [
     "networkx>=3.2",
     "numpy>=1.26",
     "matplotlib>=3.8",
+    "docplex>=2.32.264",
+    "cplex>=22.2.0.0",
 ]
 
 [dependency-groups]
