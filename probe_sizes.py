@@ -10,11 +10,11 @@ from src.direct_mip import solve_direct_mip
 from src.generator import Regime, generate_instance
 
 TIME_LIMIT = 10.0
-BACKENDS = ["cp-sat-m", "cp-sat"]  # "highs", "scip", 
+BACKENDS = ["highs", "scip", "cp-sat-m", "cp-sat"]  # 
 # Tight 8 is slow enough to show a difference in solvers
 # First few med should be fine too, up to 5
-SIZES = [8]  # [8], [1,2,3,4,5], 
-REGIMES = [Regime.TIGHT] # [TIGHT, MEDIUM, WIDE]
+SIZES = [1,2,3,4,5]  # [8], [1,2,3,4,5], 
+REGIMES = [Regime.MEDIUM] # [TIGHT, MEDIUM, WIDE]
 
 header = (
     f"{'instance':<34} {'backend':<10} {'status':<10}"
