@@ -13,6 +13,7 @@ direct MIP's per-job capacity semantics, so the two formulations share an optimu
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 
@@ -25,6 +26,53 @@ from src.backends import NUM_THREADS, ApiFamily, Backend
 from src.instance import Instance, Job
 from src.result import Result, SolveStatus
 from src.subproblem import MinCutEvaluator, PeriodCut
+
+# Diagnostic timing breakdown is emitted at INFO. Enable in a probe with
+# `logging.basicConfig(level=logging.INFO)` to see the master-vs-subproblem split.
+logger = logging.getLogger(__name__)
+
+
+def _log_breakdown(
+    backend: Backend,
+    wall_s: float,
+    master_s: float,
+    evaluator: MinCutEvaluator,
+    iterations: int,
+    cut_count: int,
+    *,
+    lazy: bool,
+) -> None:
+    """Log where a Benders solve spent its time: master re-solves vs min-cut subproblems."""
+    sub_s = evaluator.solve_time_s
+    if lazy:
+        # The single solver.solve() call runs the subproblem callback *inside* it,
+        # so master_s already includes sub_s; the remainder is solver search.
+        logger.info(
+            "benders[%s] wall=%.2fs solve(incl. callback)=%.2fs subproblem=%.3fs"
+            " (%d solves / %d calls) cuts=%d (lazy)",
+            backend.name,
+            wall_s,
+            master_s,
+            sub_s,
+            evaluator.distinct_solves,
+            evaluator.total_calls,
+            cut_count,
+        )
+    else:
+        # Loop path: master solves and subproblem evals are disjoint in time.
+        logger.info(
+            "benders[%s] wall=%.2fs master=%.2fs subproblem=%.3fs overhead=%.2fs"
+            " (%d solves / %d calls) iters=%d cuts=%d",
+            backend.name,
+            wall_s,
+            master_s,
+            sub_s,
+            wall_s - master_s - sub_s,
+            evaluator.distinct_solves,
+            evaluator.total_calls,
+            iterations,
+            cut_count,
+        )
 
 
 def _full_capacity_maxflow(instance: Instance) -> int:
@@ -218,11 +266,14 @@ def _solve_loop_cpsat(
 
     iterations = 0
     cut_count = 0
+    master_time = 0.0
     schedule: dict[str, int] = {}
     true_objective = 0
     while True:
         iterations += 1
+        t0 = time.perf_counter()
         status = solver.solve(master.model)
+        master_time += time.perf_counter() - t0
         if status != cp_model.OPTIMAL:
             # Distinguish infeasibility from other non-optimal outcomes so that
             # Benders agrees with the direct MIP on (objective, status).
@@ -261,12 +312,14 @@ def _solve_loop_cpsat(
         if added == 0:
             break
 
+    wall = time.perf_counter() - start
+    _log_breakdown(backend, wall, master_time, evaluator, iterations, cut_count, lazy=False)
     return Result(
         method="benders",
         backend=backend.name,
         status=SolveStatus.OPTIMAL,
         objective=float(true_objective),
-        wall_time_s=time.perf_counter() - start,
+        wall_time_s=wall,
         gap=0.0,
         schedule=schedule,
         iteration_count=iterations,
@@ -335,11 +388,14 @@ def _solve_loop_mathopt(
 
     iterations = 0
     cut_count = 0
+    master_time = 0.0
     schedule: dict[str, int] = {}
     true_objective = 0.0
     while True:
         iterations += 1
+        t0 = time.perf_counter()
         result = mathopt.solve(master.model, backend.solver_type)
+        master_time += time.perf_counter() - t0
         if result.termination.reason is not mathopt.TerminationReason.OPTIMAL:
             # Distinguish infeasibility from other non-optimal outcomes so that
             # Benders agrees with the direct MIP on (objective, status).
@@ -372,12 +428,14 @@ def _solve_loop_mathopt(
         if added == 0:
             break  # no violated cut => master objective is exact
 
+    wall = time.perf_counter() - start
+    _log_breakdown(backend, wall, master_time, evaluator, iterations, cut_count, lazy=False)
     return Result(
         method="benders",
         backend=backend.name,
         status=SolveStatus.OPTIMAL,
         objective=true_objective,
-        wall_time_s=time.perf_counter() - start,
+        wall_time_s=wall,
         gap=0.0,
         schedule=schedule,
         iteration_count=iterations,
@@ -433,7 +491,9 @@ def _solve_lazy_mathopt(
         return res
 
     reg = cb.CallbackRegistration(events={cb.Event.MIP_SOLUTION}, add_lazy_constraints=True)
+    t0 = time.perf_counter()
     result = mathopt.solve(master.model, backend.solver_type, callback_reg=reg, cb=on_incumbent)
+    master_time = time.perf_counter() - t0
     if result.termination.reason is not mathopt.TerminationReason.OPTIMAL:
         # Distinguish infeasibility from other non-optimal outcomes so that
         # Benders agrees with the direct MIP on (objective, status).
@@ -454,12 +514,14 @@ def _solve_lazy_mathopt(
     true_objective = sum(
         evaluator.evaluate(_closed_arcs(instance, schedule, t)).flow_value for t in periods
     )
+    wall = time.perf_counter() - start
+    _log_breakdown(backend, wall, master_time, evaluator, 1, cut_count, lazy=True)
     return Result(
         method="benders",
         backend=backend.name,
         status=SolveStatus.OPTIMAL,
         objective=float(true_objective),
-        wall_time_s=time.perf_counter() - start,
+        wall_time_s=wall,
         gap=0.0,
         schedule=schedule,
         iteration_count=1,

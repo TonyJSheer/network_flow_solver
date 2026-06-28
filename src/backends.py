@@ -50,15 +50,10 @@ NUM_THREADS: int = 6
 _REGISTRY: dict[str, Backend] = {
     "cp-sat": Backend("cp-sat", ApiFamily.CP_SAT, None, False, False),
     "cp-sat-m": Backend("cp-sat-m", ApiFamily.MATH_OPT, mathopt.SolverType.CP_SAT, False, False),
-    "scip": Backend("scip", ApiFamily.MATH_OPT, mathopt.SolverType.GSCIP, True, True),
+    "scip": Backend("scip", ApiFamily.MATH_OPT, mathopt.SolverType.GSCIP, True, False),
     # HiGHS rejects the MathOpt threads param; supports_threads_param=False skips it.
     "highs": Backend(
-        "highs",
-        ApiFamily.MATH_OPT,
-        mathopt.SolverType.HIGHS,
-        True,
-        False,
-        supports_threads_param=False,
+        "highs", ApiFamily.MATH_OPT, mathopt.SolverType.HIGHS, True, False, False,
     ),
     "gurobi": Backend("gurobi", ApiFamily.MATH_OPT, mathopt.SolverType.GUROBI, True, True),
 }

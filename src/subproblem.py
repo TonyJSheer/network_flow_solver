@@ -16,6 +16,7 @@ master variables.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 import networkx as nx
@@ -45,6 +46,9 @@ class MinCutEvaluator:
         self._cache: dict[frozenset[tuple[str, str]], PeriodCut] = {}
         self.total_calls = 0
         self.distinct_solves = 0
+        # Cumulative wall time spent in actual min-cut solves (cache misses only).
+        # Lets the Benders loop report the master-solve vs subproblem time split.
+        self.solve_time_s = 0.0
 
     def evaluate(self, closed_arcs: frozenset[tuple[str, str]]) -> PeriodCut:
         self.total_calls += 1
@@ -52,7 +56,9 @@ class MinCutEvaluator:
         if cached is not None:
             return cached
         self.distinct_solves += 1
+        t0 = time.perf_counter()
         cut = self._solve(closed_arcs)
+        self.solve_time_s += time.perf_counter() - t0
         self._cache[closed_arcs] = cut
         return cut
 
