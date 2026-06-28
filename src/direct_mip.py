@@ -30,7 +30,7 @@ import datetime
 
 from ortools.math_opt.python import mathopt
 
-from src.backends import ApiFamily, Backend
+from src.backends import NUM_THREADS, ApiFamily, Backend
 from src.instance import Instance
 from src.result import Result, SolveStatus
 
@@ -126,9 +126,11 @@ def _solve_mathopt(instance: Instance, backend: Backend, time_limit_s: float | N
     ret = (instance.sink, instance.source)
     model.maximize(sum((f[(ret[0], ret[1], t)] for t in periods), start=mathopt.LinearExpression()))
 
-    params = mathopt.SolveParameters()
-    if time_limit_s is not None:
-        params = mathopt.SolveParameters(time_limit=datetime.timedelta(seconds=time_limit_s))
+    params = mathopt.SolveParameters(
+        # HiGHS rejects the threads param via MathOpt; use NUM_THREADS only where supported.
+        threads=NUM_THREADS if backend.supports_threads_param else None,
+        time_limit=datetime.timedelta(seconds=time_limit_s) if time_limit_s is not None else None,
+    )
     result = mathopt.solve(model, backend.solver_type, params=params)
     return _to_result(instance, backend, result, x, starts)
 

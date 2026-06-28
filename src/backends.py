@@ -34,7 +34,13 @@ class Backend:
     solver_type: mathopt.SolverType | None  # MathOpt SolverType; None for CP-SAT
     continuous_flow: bool
     supports_lazy: bool
+    # HiGHS rejects the MathOpt threads= param (must be set via globals); others accept it.
+    supports_threads_param: bool = True
 
+
+# Single thread count used by every backend — keeps solve-time comparisons fair.
+# Increase for real benchmarks, but keep at 1 for reproducible timing.
+NUM_THREADS: int = 1
 
 # Static registry. supports_lazy defaults conservatively to False everywhere:
 # CP-SAT has no lazy callbacks (always the iterative loop); whether MathOpt
@@ -45,7 +51,8 @@ _REGISTRY: dict[str, Backend] = {
     # Manually added, interesting test case to compare performance.
     "cp-sat-m": Backend("cp-sat-m", ApiFamily.MATH_OPT, mathopt.SolverType.CP_SAT, False, False),
     "scip": Backend("scip", ApiFamily.MATH_OPT, mathopt.SolverType.GSCIP, True, False),
-    "highs": Backend("highs", ApiFamily.MATH_OPT, mathopt.SolverType.HIGHS, True, False),
+    # HiGHS rejects the MathOpt threads param; supports_threads_param=False skips it.
+    "highs": Backend("highs", ApiFamily.MATH_OPT, mathopt.SolverType.HIGHS, True, False, supports_threads_param=False),
     "gurobi": Backend("gurobi", ApiFamily.MATH_OPT, mathopt.SolverType.GUROBI, True, False),
 }
 
