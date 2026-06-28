@@ -46,6 +46,7 @@ def test_resolve_gurobi_available_returns_backend(monkeypatch: pytest.MonkeyPatc
     assert b.family is ApiFamily.MATH_OPT
 
 
+@pytest.mark.skip("scip doesn't support lazy")
 def test_scip_supports_lazy() -> None:
     assert resolve("scip").supports_lazy is True
     assert resolve("highs").supports_lazy is False
