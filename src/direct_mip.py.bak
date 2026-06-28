@@ -22,15 +22,10 @@ Formulation (docs/superpowers/specs/2026-06-27-direct-mip-formulation-design.md)
 
 Backend note: the MathOpt backends build the continuous-flow transliteration above
 (also reachable as the cp-sat-m backend). The native CP-SAT backend (_solve_cp_sat)
-builds the same model with integer flow vars, keeping the LINEAR capacity-outage
-constraint f <= cap*(1-y) so CP-SAT's internal LP relaxation sees the flow
-structure, plus the native touches that don't hurt the LP: add_exactly_one for
-scheduling and add_cumulative over optional intervals for <=K. (An earlier
-enforcement-literal outage — f==0 only_enforce_if(x) — is preserved in
-direct_mip.py.bak; it is big-M free but hides the flow/capacity from the LP and
-cripples the bound on large/wide instances.) Integer is exact here (integral
-capacities give an integral max flow), so every backend reaches the same optimum;
-the cross-backend agreement tests enforce it.
+builds a CP-idiomatic model — presence literals + optional intervals, exactly-one,
+enforcement-literal outage, and add_cumulative for <=K — with integer flow vars.
+Integer is exact here (integral capacities give an integral max flow), so every
+backend reaches the same optimum; the cross-backend agreement tests enforce it.
 """
 
 from __future__ import annotations
@@ -62,14 +57,13 @@ def solve_direct_mip(
 
 
 def _solve_cp_sat(instance: Instance, backend: Backend, time_limit_s: float | None) -> Result:
-    # Native CP-SAT build, LP-friendly. Same model as the MathOpt path, built via
-    # cp_model with integer flow vars, but using the CP-SAT engine where it helps
-    # without hurting the LP relaxation: add_exactly_one for scheduling, the LINEAR
-    # capacity-outage constraint f <= cap*(1-y) (so the internal LP sees the flow
-    # structure), and add_cumulative over optional intervals for the optional <=K.
-    # Flow vars are INTEGER: CP-SAT is integer/Boolean only, which is exact here
-    # because integral arc capacities give an integral max flow.
-    # (The earlier enforcement-literal outage variant is kept in direct_mip.py.bak.)
+    # Native CP-SAT showcase build — deliberately a different formulation from the
+    # MathOpt transliteration (which is also reachable as the cp-sat-m backend).
+    # It uses the CP-SAT scheduling engine: presence literals + optional interval
+    # vars, add_exactly_one, enforcement-literal outage (big-M free), and
+    # add_cumulative for the optional <=K. Flow vars are INTEGER: CP-SAT is
+    # integer/Boolean only, which is exact here because integral arc capacities
+    # give an integral max flow, so no relaxation is lost vs the continuous build.
     periods = range(1, instance.horizon + 1)
     model = cp_model.CpModel()
 
@@ -112,20 +106,13 @@ def _solve_cp_sat(instance: Instance, backend: Backend, time_limit_s: float | No
         # (1) scheduled exactly once — a native exactly-one clause.
         model.add_exactly_one(literals)
 
-    # (2) capacity tied to outage as a LINEAR constraint f <= cap*(1-y), where
-    # y[j,t] = sum of starts s with t-d+1 <= s <= t (clamped to the window) = 1 iff
-    # job j is in progress at t. Keeping it linear (not f==0 only_enforce_if) lets
-    # CP-SAT's internal LP relaxation bound the flow directly.
+    # (2) capacity tied to outage via enforcement literals (big-M free): if job j
+    # starts at s, its arc is fully down for periods [s, s+d-1]. Exactly one start
+    # is chosen per job, so exactly the right periods are zeroed.
     for j in instance.jobs:
-        cap = arc_caps[j.arc]
-        window = starts[j.id]
-        for t in periods:
-            lo = max(window.start, t - j.duration + 1)
-            hi = min(window.stop - 1, t)
-            if lo > hi:
-                continue  # job j cannot be in progress at t; the flow var ub already caps f
-            y = cp_model.LinearExpr.sum([x[(j.id, s)] for s in range(lo, hi + 1)])
-            model.add(f[(j.arc[0], j.arc[1], t)] <= cap * (1 - y))
+        for s in starts[j.id]:
+            for t in range(s, s + j.duration):
+                model.add(f[(j.arc[0], j.arc[1], t)] == 0).only_enforce_if(x[(j.id, s)])
 
     # (3) circulation: flow conservation at every node (return arc balances s/t).
     for n in instance.nodes:

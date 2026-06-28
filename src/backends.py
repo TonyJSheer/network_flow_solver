@@ -40,7 +40,7 @@ class Backend:
 
 # Single thread count used by every backend — keeps solve-time comparisons fair.
 # Increase for real benchmarks, but keep at 1 for reproducible timing.
-NUM_THREADS: int = 1
+NUM_THREADS: int = 6
 
 # Static registry. supports_lazy defaults conservatively to False everywhere:
 # CP-SAT has no lazy callbacks (always the iterative loop); whether MathOpt
@@ -48,7 +48,6 @@ NUM_THREADS: int = 1
 # Confirmed SolverType names from installed ortools: GSCIP, HIGHS, GUROBI.
 _REGISTRY: dict[str, Backend] = {
     "cp-sat": Backend("cp-sat", ApiFamily.CP_SAT, None, False, False),
-    # Manually added, interesting test case to compare performance.
     "cp-sat-m": Backend("cp-sat-m", ApiFamily.MATH_OPT, mathopt.SolverType.CP_SAT, False, False),
     "scip": Backend("scip", ApiFamily.MATH_OPT, mathopt.SolverType.GSCIP, True, False),
     # HiGHS rejects the MathOpt threads param; supports_threads_param=False skips it.
