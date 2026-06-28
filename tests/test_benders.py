@@ -78,3 +78,21 @@ def test_benders_k_one_keeps_toy_optimum() -> None:
     res = solve_benders(inst, resolve("highs"))
     assert res.status is SolveStatus.OPTIMAL
     assert res.objective == pytest.approx(8.0)
+
+
+def test_benders_k_zero_makes_instance_infeasible() -> None:
+    # Every job must be scheduled exactly once => in progress at some period;
+    # K=0 forbids any in-progress period, so the master is infeasible.
+    # This BINDS: without the <=K constraint the model would be feasible/optimal.
+    inst = replace(toy_instance(), max_jobs_per_period=0)
+    res = solve_benders(inst, resolve("highs"))
+    assert res.status is SolveStatus.INFEASIBLE
+    assert res.objective is None
+
+
+def test_benders_k_zero_infeasible_cpsat() -> None:
+    # Same binding K=0 test, covering the CP-SAT iterative-loop path.
+    inst = replace(toy_instance(), max_jobs_per_period=0)
+    res = solve_benders(inst, resolve("cp-sat"))
+    assert res.status is SolveStatus.INFEASIBLE
+    assert res.objective is None

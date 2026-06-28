@@ -166,10 +166,15 @@ def _solve_loop_cpsat(
         iterations += 1
         status = solver.solve(master.model)
         if status != cp_model.OPTIMAL:
+            # Distinguish infeasibility from other non-optimal outcomes so that
+            # Benders agrees with the direct MIP on (objective, status).
+            solve_status = (
+                SolveStatus.INFEASIBLE if status == cp_model.INFEASIBLE else SolveStatus.UNKNOWN
+            )
             return Result(
                 method="benders",
                 backend=backend.name,
-                status=SolveStatus.UNKNOWN,
+                status=solve_status,
                 objective=None,
                 wall_time_s=time.perf_counter() - start,
                 iteration_count=iterations,
@@ -273,10 +278,17 @@ def _solve_loop_mathopt(
         iterations += 1
         result = mathopt.solve(master.model, backend.solver_type)
         if result.termination.reason is not mathopt.TerminationReason.OPTIMAL:
+            # Distinguish infeasibility from other non-optimal outcomes so that
+            # Benders agrees with the direct MIP on (objective, status).
+            solve_status = (
+                SolveStatus.INFEASIBLE
+                if result.termination.reason is mathopt.TerminationReason.INFEASIBLE
+                else SolveStatus.UNKNOWN
+            )
             return Result(
                 method="benders",
                 backend=backend.name,
-                status=SolveStatus.UNKNOWN,
+                status=solve_status,
                 objective=None,
                 wall_time_s=time.perf_counter() - start,
                 iteration_count=iterations,
@@ -354,10 +366,17 @@ def _solve_lazy_mathopt(
     reg = cb.CallbackRegistration(events={cb.Event.MIP_SOLUTION}, add_lazy_constraints=True)
     result = mathopt.solve(master.model, backend.solver_type, callback_reg=reg, cb=on_incumbent)
     if result.termination.reason is not mathopt.TerminationReason.OPTIMAL:
+        # Distinguish infeasibility from other non-optimal outcomes so that
+        # Benders agrees with the direct MIP on (objective, status).
+        solve_status = (
+            SolveStatus.INFEASIBLE
+            if result.termination.reason is mathopt.TerminationReason.INFEASIBLE
+            else SolveStatus.UNKNOWN
+        )
         return Result(
             method="benders",
             backend=backend.name,
-            status=SolveStatus.UNKNOWN,
+            status=solve_status,
             objective=None,
             wall_time_s=time.perf_counter() - start,
             cut_count=cut_count,
