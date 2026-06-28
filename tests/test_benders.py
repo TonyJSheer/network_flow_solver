@@ -38,3 +38,11 @@ def test_benders_agrees_with_direct_mip_toy_highs() -> None:
     d = solve_direct_mip(inst, resolve("highs"))
     assert b.status is d.status is SolveStatus.OPTIMAL
     assert b.objective == pytest.approx(d.objective)
+
+
+def test_loop_reaches_toy_optimum_cpsat() -> None:
+    res = solve_benders(toy_instance(), resolve("cp-sat"))
+    assert res.backend == "cp-sat"
+    assert res.status is SolveStatus.OPTIMAL
+    assert res.objective == pytest.approx(8.0)
+    assert res.schedule is not None and res.schedule["j0"] in range(1, 6)

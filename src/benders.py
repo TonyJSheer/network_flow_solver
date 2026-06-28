@@ -18,8 +18,9 @@ from dataclasses import dataclass
 
 import networkx as nx
 from ortools.math_opt.python import mathopt
+from ortools.sat.python import cp_model
 
-from src.backends import Backend
+from src.backends import NUM_THREADS, ApiFamily, Backend
 from src.instance import Instance, Job
 from src.result import Result, SolveStatus
 from src.subproblem import MinCutEvaluator, PeriodCut
@@ -84,6 +85,110 @@ def _build_master_mathopt(instance: Instance, ub: int) -> _Master:
     }
     model.maximize(sum((theta[t] for t in periods), start=mathopt.LinearExpression()))
     return _Master(model=model, x=x, y=y, theta=theta, starts=starts)
+
+
+@dataclass
+class _MasterCp:
+    model: cp_model.CpModel
+    x: dict[tuple[str, int], cp_model.IntVar]
+    y: dict[tuple[tuple[str, str], int], cp_model.IntVar]
+    theta: dict[int, cp_model.IntVar]
+    starts: dict[str, range]
+
+
+def _build_master_cpsat(instance: Instance, ub: int) -> _MasterCp:
+    periods = range(1, instance.horizon + 1)
+    model = cp_model.CpModel()
+    x: dict[tuple[str, int], cp_model.IntVar] = {}
+    starts: dict[str, range] = {}
+    for j in instance.jobs:
+        starts[j.id] = range(j.release, j.deadline + 1)
+        lits = [model.new_bool_var(f"x[{j.id},{s}]") for s in starts[j.id]]
+        for s, lit in zip(starts[j.id], lits, strict=True):
+            x[(j.id, s)] = lit
+        model.add_exactly_one(lits)
+
+    def in_progress(job: Job, t: int) -> cp_model.LinearExpr:
+        lo = max(starts[job.id].start, t - job.duration + 1)
+        hi = min(starts[job.id].stop - 1, t)
+        return cp_model.LinearExpr.sum([x[(job.id, s)] for s in range(lo, hi + 1)])
+
+    y: dict[tuple[tuple[str, str], int], cp_model.IntVar] = {}
+    for arc, jobs in _jobs_on_arc(instance).items():
+        for t in periods:
+            yvar = model.new_int_var(0, 1, f"y[{arc[0]},{arc[1]},{t}]")
+            y[(arc, t)] = yvar
+            for j in jobs:
+                model.add(yvar <= 1 - in_progress(j, t))
+
+    theta = {t: model.new_int_var(0, ub, f"theta[{t}]") for t in periods}
+    model.maximize(cp_model.LinearExpr.sum([theta[t] for t in periods]))
+    return _MasterCp(model=model, x=x, y=y, theta=theta, starts=starts)
+
+
+def _solve_loop_cpsat(
+    instance: Instance, backend: Backend, time_limit_s: float | None, *, pre_cuts: bool
+) -> Result:
+    start = time.perf_counter()
+    ub = _full_capacity_maxflow(instance)
+    master = _build_master_cpsat(instance, ub)
+    evaluator = MinCutEvaluator(instance)
+    arcs_with_jobs = frozenset(_jobs_on_arc(instance))
+    periods = range(1, instance.horizon + 1)
+    solver = cp_model.CpSolver()
+    solver.parameters.num_workers = NUM_THREADS
+
+    iterations = 0
+    cut_count = 0
+    schedule: dict[str, int] = {}
+    true_objective = 0
+    while True:
+        iterations += 1
+        status = solver.solve(master.model)
+        if status != cp_model.OPTIMAL:
+            return Result(
+                method="benders",
+                backend=backend.name,
+                status=SolveStatus.UNKNOWN,
+                objective=None,
+                wall_time_s=time.perf_counter() - start,
+                iteration_count=iterations,
+                cut_count=cut_count,
+            )
+        schedule = {
+            job_id: next(s for s in window if solver.value(master.x[(job_id, s)]) > 0.5)
+            for job_id, window in master.starts.items()
+        }
+        added = 0
+        true_objective = 0
+        for t in periods:
+            cut = evaluator.evaluate(_closed_arcs(instance, schedule, t))
+            true_objective += cut.flow_value
+            if solver.value(master.theta[t]) > cut.flow_value:
+                rhs: list[cp_model.LinearExpr] = []
+                const = 0
+                for arc, cap in cut.coeffs.items():
+                    if arc in arcs_with_jobs:
+                        rhs.append(cap * master.y[(arc, t)])
+                    else:
+                        const += cap
+                master.model.add(master.theta[t] <= cp_model.LinearExpr.sum(rhs) + const)
+                added += 1
+                cut_count += 1
+        if added == 0:
+            break
+
+    return Result(
+        method="benders",
+        backend=backend.name,
+        status=SolveStatus.OPTIMAL,
+        objective=float(true_objective),
+        wall_time_s=time.perf_counter() - start,
+        gap=0.0,
+        schedule=schedule,
+        iteration_count=iterations,
+        cut_count=cut_count,
+    )
 
 
 _EPS = 1e-6
@@ -193,6 +298,6 @@ def solve_benders(
     pre_cuts: bool = False,
 ) -> Result:
     """Solve via disaggregated Benders (analytic min-cut, iterative loop)."""
-    if backend.solver_type is None:
-        raise ValueError(f"backend {backend.name!r} has no MathOpt SolverType")
+    if backend.family is ApiFamily.CP_SAT:
+        return _solve_loop_cpsat(instance, backend, time_limit_s, pre_cuts=pre_cuts)
     return _solve_loop_mathopt(instance, backend, time_limit_s, pre_cuts=pre_cuts)
