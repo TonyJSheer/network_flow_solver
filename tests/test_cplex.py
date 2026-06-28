@@ -42,3 +42,36 @@ def test_direct_mip_k_zero_infeasible() -> None:
     res = solve_cplex_direct_mip(inst)
     assert res.status is SolveStatus.INFEASIBLE
     assert res.objective is None
+
+
+def test_lazy_callback_fires_and_cuts() -> None:
+    # Trivial model: maximize z, z <= 10. A lazy callback adds z <= 3 whenever it
+    # sees an incumbent with z > 3. Proves the mixin + add() path drives the
+    # optimum down to 3 and that the callback actually fires.
+    from cplex.callbacks import LazyConstraintCallback
+    from docplex.mp.callbacks.cb_mixin import ConstraintCallbackMixin
+    from docplex.mp.model import Model
+
+    class _SmokeCallback(ConstraintCallbackMixin, LazyConstraintCallback):
+        def __init__(self, env: object) -> None:
+            LazyConstraintCallback.__init__(self, env)
+            ConstraintCallbackMixin.__init__(self)
+            self.fired = 0
+
+        def __call__(self) -> None:
+            sol = self.make_solution_from_vars([self.z])
+            if sol.get_value(self.z) > 3.0 + 1e-6:
+                self.fired += 1
+                cpx_lhs, sense, cpx_rhs = self.linear_ct_to_cplex(self.z <= 3)
+                self.add(cpx_lhs, sense, cpx_rhs)
+
+    model = Model(name="smoke")
+    z = model.integer_var(lb=0, ub=10, name="z")
+    model.maximize(z)
+    cb = model.register_callback(_SmokeCallback)
+    cb.z = z
+    sol = model.solve()
+
+    assert sol is not None
+    assert sol.get_value(z) == pytest.approx(3.0)
+    assert cb.fired >= 1
