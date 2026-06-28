@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.generator import Regime, generate_instance, toy_instance
+from src.generator import toy_instance
 from src.result import SolveStatus
 
 
@@ -18,3 +18,27 @@ def test_cplex_imports() -> None:
     from cplex.callbacks import LazyConstraintCallback  # noqa: F401
     from docplex.mp.callbacks.cb_mixin import ConstraintCallbackMixin  # noqa: F401
     from docplex.mp.model import Model  # noqa: F401
+
+
+def test_direct_mip_toy_optimum() -> None:
+    from src.cplex_mip import solve_cplex_direct_mip
+
+    res = solve_cplex_direct_mip(toy_instance())
+    assert res.method == "direct_mip"
+    assert res.backend == "cplex"
+    assert res.status is SolveStatus.OPTIMAL
+    assert res.objective == pytest.approx(8.0)
+    assert res.schedule is not None
+    assert res.schedule["j0"] in range(1, 6)
+    assert res.wall_time_s >= 0.0
+
+
+def test_direct_mip_k_zero_infeasible() -> None:
+    from dataclasses import replace
+
+    from src.cplex_mip import solve_cplex_direct_mip
+
+    inst = replace(toy_instance(), max_jobs_per_period=0)
+    res = solve_cplex_direct_mip(inst)
+    assert res.status is SolveStatus.INFEASIBLE
+    assert res.objective is None

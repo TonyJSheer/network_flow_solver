@@ -36,5 +36,9 @@ strict = true
 module = ["networkx.*", "ortools.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["docplex.*", "cplex.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
