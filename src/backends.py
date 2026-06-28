@@ -38,8 +38,8 @@ class Backend:
     supports_threads_param: bool = True
 
 
-# Single thread count used by every backend — keeps solve-time comparisons fair.
-# Increase for real benchmarks, but keep at 1 for reproducible timing.
+# Worker count for all backends — held equal so solve-time comparisons stay fair.
+# 6 (not 1): CP-SAT's speed relies on its multi-worker search portfolio.
 NUM_THREADS: int = 6
 
 # Static registry. supports_lazy: CP-SAT and HiGHS always use the iterative
