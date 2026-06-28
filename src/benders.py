@@ -13,6 +13,7 @@ direct MIP's per-job capacity semantics, so the two formulations share an optimu
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 import networkx as nx
@@ -21,6 +22,7 @@ from ortools.math_opt.python import mathopt
 from src.backends import Backend
 from src.instance import Instance, Job
 from src.result import Result, SolveStatus
+from src.subproblem import MinCutEvaluator, PeriodCut
 
 
 def _full_capacity_maxflow(instance: Instance) -> int:
@@ -84,6 +86,105 @@ def _build_master_mathopt(instance: Instance, ub: int) -> _Master:
     return _Master(model=model, x=x, y=y, theta=theta, starts=starts)
 
 
+_EPS = 1e-6
+
+
+def _closed_arcs(
+    instance: Instance, schedule: dict[str, int], t: int
+) -> frozenset[tuple[str, str]]:
+    closed: set[tuple[str, str]] = set()
+    for j in instance.jobs:
+        s = schedule[j.id]
+        if s <= t <= s + j.duration - 1:
+            closed.add(j.arc)
+    return frozenset(closed)
+
+
+def _schedule_from_mathopt(
+    result: mathopt.SolveResult,
+    starts: dict[str, range],
+    x: dict[tuple[str, int], mathopt.Variable],
+) -> dict[str, int]:
+    schedule: dict[str, int] = {}
+    for job_id, window in starts.items():
+        for s in window:
+            if result.variable_values(x[(job_id, s)]) > 0.5:
+                schedule[job_id] = s
+                break
+    return schedule
+
+
+def _cut_rhs_mathopt(
+    master: _Master,
+    arcs_with_jobs: frozenset[tuple[str, str]],
+    t: int,
+    cut: PeriodCut,
+) -> mathopt.LinearExpression:
+    rhs = mathopt.LinearExpression()
+    for arc, cap in cut.coeffs.items():
+        if arc in arcs_with_jobs:
+            rhs += cap * master.y[(arc, t)]
+        else:
+            rhs += cap  # arc never under maintenance => always open
+    return rhs
+
+
+def _solve_loop_mathopt(
+    instance: Instance, backend: Backend, time_limit_s: float | None, *, pre_cuts: bool
+) -> Result:
+    assert backend.solver_type is not None
+    start = time.perf_counter()
+    ub = _full_capacity_maxflow(instance)
+    master = _build_master_mathopt(instance, ub)
+    evaluator = MinCutEvaluator(instance)
+    arcs_with_jobs = frozenset(_jobs_on_arc(instance))
+    periods = range(1, instance.horizon + 1)
+
+    iterations = 0
+    cut_count = 0
+    schedule: dict[str, int] = {}
+    true_objective = 0.0
+    while True:
+        iterations += 1
+        result = mathopt.solve(master.model, backend.solver_type)
+        if result.termination.reason is not mathopt.TerminationReason.OPTIMAL:
+            return Result(
+                method="benders",
+                backend=backend.name,
+                status=SolveStatus.UNKNOWN,
+                objective=None,
+                wall_time_s=time.perf_counter() - start,
+                iteration_count=iterations,
+                cut_count=cut_count,
+            )
+        schedule = _schedule_from_mathopt(result, master.starts, master.x)
+        added = 0
+        true_objective = 0.0
+        for t in periods:
+            cut = evaluator.evaluate(_closed_arcs(instance, schedule, t))
+            true_objective += cut.flow_value
+            if result.variable_values(master.theta[t]) > cut.flow_value + _EPS:
+                master.model.add_linear_constraint(
+                    master.theta[t] <= _cut_rhs_mathopt(master, arcs_with_jobs, t, cut)
+                )
+                added += 1
+                cut_count += 1
+        if added == 0:
+            break  # no violated cut => master objective is exact
+
+    return Result(
+        method="benders",
+        backend=backend.name,
+        status=SolveStatus.OPTIMAL,
+        objective=true_objective,
+        wall_time_s=time.perf_counter() - start,
+        gap=0.0,
+        schedule=schedule,
+        iteration_count=iterations,
+        cut_count=cut_count,
+    )
+
+
 def solve_benders(
     instance: Instance,
     backend: Backend,
@@ -91,21 +192,7 @@ def solve_benders(
     *,
     pre_cuts: bool = False,
 ) -> Result:
-    """Solve via disaggregated Benders. (This task: master only, no cuts yet.)"""
-    ub = _full_capacity_maxflow(instance)
+    """Solve via disaggregated Benders (analytic min-cut, iterative loop)."""
     if backend.solver_type is None:
         raise ValueError(f"backend {backend.name!r} has no MathOpt SolverType")
-    master = _build_master_mathopt(instance, ub)
-    result = mathopt.solve(master.model, backend.solver_type)
-    status = (
-        SolveStatus.OPTIMAL
-        if result.termination.reason is mathopt.TerminationReason.OPTIMAL
-        else SolveStatus.UNKNOWN
-    )
-    return Result(
-        method="benders",
-        backend=backend.name,
-        status=status,
-        objective=result.objective_value() if result.has_primal_feasible_solution() else None,
-        wall_time_s=result.solve_stats.solve_time.total_seconds(),
-    )
+    return _solve_loop_mathopt(instance, backend, time_limit_s, pre_cuts=pre_cuts)
