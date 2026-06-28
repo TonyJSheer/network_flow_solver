@@ -17,6 +17,7 @@ import time
 from dataclasses import dataclass
 
 import networkx as nx
+from ortools.math_opt.python import callback as cb
 from ortools.math_opt.python import mathopt
 from ortools.sat.python import cp_model
 
@@ -290,6 +291,75 @@ def _solve_loop_mathopt(
     )
 
 
+def _solve_lazy_mathopt(
+    instance: Instance, backend: Backend, time_limit_s: float | None, *, pre_cuts: bool
+) -> Result:
+    """Benders via MathOpt lazy-constraint callback (SCIP / Gurobi).
+
+    At each MIP incumbent the callback evaluates all periods and injects a
+    disaggregated cut for every violated theta_t. The solver never returns an
+    infeasible schedule — it only terminates when no violated cut exists at the
+    optimal incumbent.
+
+    time_limit_s is accepted for API parity with the loop paths but is NOT
+    wired into mathopt.solve; time-limit wiring is deferred to Stage 4.
+    """
+    assert backend.solver_type is not None
+    start = time.perf_counter()
+    ub = _full_capacity_maxflow(instance)
+    master = _build_master_mathopt(instance, ub)
+    evaluator = MinCutEvaluator(instance)
+    arcs_with_jobs = frozenset(_jobs_on_arc(instance))
+    periods = range(1, instance.horizon + 1)
+    cut_count = 0
+
+    def on_incumbent(data: cb.CallbackData) -> cb.CallbackResult:
+        nonlocal cut_count
+        vals = data.solution
+        schedule: dict[str, int] = {}
+        for job_id, window in master.starts.items():
+            for s in window:
+                if vals[master.x[(job_id, s)]] > 0.5:
+                    schedule[job_id] = s
+                    break
+        res = cb.CallbackResult()
+        for t in periods:
+            cut = evaluator.evaluate(_closed_arcs(instance, schedule, t))
+            if vals[master.theta[t]] > cut.flow_value + _EPS:
+                res.add_lazy_constraint(
+                    master.theta[t] <= _cut_rhs_mathopt(master, arcs_with_jobs, t, cut)
+                )
+                cut_count += 1
+        return res
+
+    reg = cb.CallbackRegistration(events={cb.Event.MIP_SOLUTION}, add_lazy_constraints=True)
+    result = mathopt.solve(master.model, backend.solver_type, callback_reg=reg, cb=on_incumbent)
+    if result.termination.reason is not mathopt.TerminationReason.OPTIMAL:
+        return Result(
+            method="benders",
+            backend=backend.name,
+            status=SolveStatus.UNKNOWN,
+            objective=None,
+            wall_time_s=time.perf_counter() - start,
+            cut_count=cut_count,
+        )
+    schedule = _schedule_from_mathopt(result, master.starts, master.x)
+    true_objective = sum(
+        evaluator.evaluate(_closed_arcs(instance, schedule, t)).flow_value for t in periods
+    )
+    return Result(
+        method="benders",
+        backend=backend.name,
+        status=SolveStatus.OPTIMAL,
+        objective=float(true_objective),
+        wall_time_s=time.perf_counter() - start,
+        gap=0.0,
+        schedule=schedule,
+        iteration_count=1,
+        cut_count=cut_count,
+    )
+
+
 def solve_benders(
     instance: Instance,
     backend: Backend,
@@ -297,7 +367,15 @@ def solve_benders(
     *,
     pre_cuts: bool = False,
 ) -> Result:
-    """Solve via disaggregated Benders (analytic min-cut, iterative loop)."""
+    """Solve via disaggregated Benders.
+
+    Dispatch:
+    - CP-SAT family → iterative cut loop (CP-SAT has no lazy callbacks).
+    - MathOpt + supports_lazy → lazy-constraint callback (SCIP / Gurobi).
+    - MathOpt + not supports_lazy → iterative re-solve loop (HiGHS).
+    """
     if backend.family is ApiFamily.CP_SAT:
         return _solve_loop_cpsat(instance, backend, time_limit_s, pre_cuts=pre_cuts)
+    if backend.supports_lazy:
+        return _solve_lazy_mathopt(instance, backend, time_limit_s, pre_cuts=pre_cuts)
     return _solve_loop_mathopt(instance, backend, time_limit_s, pre_cuts=pre_cuts)

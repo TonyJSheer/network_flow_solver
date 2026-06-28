@@ -46,3 +46,11 @@ def test_loop_reaches_toy_optimum_cpsat() -> None:
     assert res.status is SolveStatus.OPTIMAL
     assert res.objective == pytest.approx(8.0)
     assert res.schedule is not None and res.schedule["j0"] in range(1, 6)
+
+
+def test_lazy_reaches_toy_optimum_scip() -> None:
+    res = solve_benders(toy_instance(), resolve("scip"))
+    assert res.backend == "scip"
+    assert res.status is SolveStatus.OPTIMAL
+    assert res.objective == pytest.approx(8.0)
+    assert res.cut_count is not None and res.cut_count >= 1

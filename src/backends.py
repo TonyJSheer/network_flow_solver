@@ -42,14 +42,15 @@ class Backend:
 # Increase for real benchmarks, but keep at 1 for reproducible timing.
 NUM_THREADS: int = 6
 
-# Static registry. supports_lazy defaults conservatively to False everywhere:
-# CP-SAT has no lazy callbacks (always the iterative loop); whether MathOpt
-# exposes SCIP lazy callbacks is verified when Stage 3 (Benders) is built.
+# Static registry. supports_lazy: CP-SAT and HiGHS always use the iterative
+# cut loop (no lazy-callback support). SCIP and Gurobi support MIP_SOLUTION
+# lazy-constraint callbacks via ortools.math_opt.python.callback — confirmed
+# in Stage 3a Task 5. HiGHS and CP-SAT keep supports_lazy=False.
 # Confirmed SolverType names from installed ortools: GSCIP, HIGHS, GUROBI.
 _REGISTRY: dict[str, Backend] = {
     "cp-sat": Backend("cp-sat", ApiFamily.CP_SAT, None, False, False),
     "cp-sat-m": Backend("cp-sat-m", ApiFamily.MATH_OPT, mathopt.SolverType.CP_SAT, False, False),
-    "scip": Backend("scip", ApiFamily.MATH_OPT, mathopt.SolverType.GSCIP, True, False),
+    "scip": Backend("scip", ApiFamily.MATH_OPT, mathopt.SolverType.GSCIP, True, True),
     # HiGHS rejects the MathOpt threads param; supports_threads_param=False skips it.
     "highs": Backend(
         "highs",
@@ -59,7 +60,7 @@ _REGISTRY: dict[str, Backend] = {
         False,
         supports_threads_param=False,
     ),
-    "gurobi": Backend("gurobi", ApiFamily.MATH_OPT, mathopt.SolverType.GUROBI, True, False),
+    "gurobi": Backend("gurobi", ApiFamily.MATH_OPT, mathopt.SolverType.GUROBI, True, True),
 }
 
 

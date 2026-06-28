@@ -44,3 +44,9 @@ def test_resolve_gurobi_available_returns_backend(monkeypatch: pytest.MonkeyPatc
     b = resolve("gurobi")
     assert b.name == "gurobi"
     assert b.family is ApiFamily.MATH_OPT
+
+
+def test_scip_supports_lazy() -> None:
+    assert resolve("scip").supports_lazy is True
+    assert resolve("highs").supports_lazy is False
+    assert resolve("cp-sat").supports_lazy is False
